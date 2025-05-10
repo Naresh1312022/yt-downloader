@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #ff0000;
+            margin-bottom: 20px;
+        }
+        input {
+            padding: 10px;
+            width: 80%;
+            max-width: 400px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #cc0000;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            min-height: 20px;
+            color: #333;
+        }
+        .error {
+            color: #d32f2f;
+        }
+        .success {
+            color: #388e3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>YouTube Video Downloader</h2>
+        <div>
+            <input type="text" id="ytUrl" placeholder="Enter YouTube video URL (e.g., https://www.youtube.com/watch?v=...)">
+            <button id="downloadBtn" onclick="downloadVideo()">Download</button>
+        </div>
+        <p id="status"></p>
+    </div>
+
+    <script>
+const downloadBtn = document.getElementById('downloadBtn');
+const ytUrlInput = document.getElementById('ytUrl');
+const statusElement = document.getElementById('status');
+
+const ytUrlPattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+/;
+
+function showStatus(message, isError = false) {
+    statusElement.textContent = message;
+    statusElement.className = isError ? 'error' : 'success';
+}
+
+async function downloadVideo() {
+    const url = ytUrlInput.value.trim();
+    
+    if (!url || !ytUrlPattern.test(url)) {
+        showStatus("Please enter a valid YouTube URL", true);
+        return;
+    }
+
+    try {
+        downloadBtn.disabled = true;
+        showStatus("🔍 Sanitizing URL and contacting server...");
+
+        const response = await fetch("/download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ detail: "Unknown server error" }));
+            throw new Error(err.detail || "Failed to download video");
+        }
+
+        showStatus("⬇️ Downloading video...");
+
+        const chunks = [];
+        const reader = response.body.getReader();
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+        }
+
+        showStatus("🧩 Finalizing download...");
+
+        const blob = new Blob(chunks);
+        const filename = response.headers.get("Content-Disposition")?.split("filename=")[1] || "video.mp4";
+
+        const a = document.createElement("a");
+        a.href = window.URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        showStatus("✅ Download complete!");
+    } catch (error) {
+        showStatus(`❌ ${error.message}`, true);
+        console.error("Download error:", error);
+    } finally {
+        downloadBtn.disabled = false;
+    }
+}
+
+ytUrlInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        downloadVideo();
+    }
+});
+</script>
+</body>
+</html>
